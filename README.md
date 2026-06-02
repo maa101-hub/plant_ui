@@ -175,16 +175,35 @@ git clone https://github.com/maa101-hub/plant_ui.git
 cd plant_ui
 ```
 
-### 2. Download model files
+### 2. Download model weights
 
-Download the following and place them in `backend/`:
+Model weights are hosted on Google Drive (too large for GitHub).
+Run the included download script — it handles everything automatically:
 
-| File | Description | Link |
+```bash
+python download_models.py
+```
+
+Or download manually from Google Drive:
+
+> 📁 **[PlantVision AI — Model Weights](https://drive.google.com/drive/folders/1xV_1wPDesZ-MYHesROaltngmM7SmSyJf?usp=drive_link)**
+
+| Folder | Description | Size |
 |---|---|---|
-| `plant_disease_customcnn/` | New Custom CNN (folder format) | Your trained model |
-| `plant_disease_resnet50/` | ResNet50 fine-tuned (folder format) | Your trained model |
-| `disease_info.csv` | Disease descriptions | Included in repo |
-| `supplement_info.csv` | Supplement recommendations | Included in repo |
+| `plant_disease_customcnn/` | Custom CNN — VGG-style, 38 classes, 128×128 | ~200MB |
+| `plant_disease_resnet50/` | ResNet50 fine-tuned, 38 classes, 224×224 | ~370MB |
+
+Place both folders inside `backend/` so the structure looks like:
+```
+backend/
+├── plant_disease_customcnn/   ← downloaded
+├── plant_disease_resnet50/    ← downloaded
+├── main.py
+├── models.py
+└── ...
+```
+
+The CSVs (`disease_info.csv`, `supplement_info.csv`) are already included in the repo.
 
 ### 3. Start the Backend
 
