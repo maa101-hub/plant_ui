@@ -16,8 +16,10 @@ frontend/node_modules/
 frontend/dist/
 frontend/.vite/
 
-# Model weights (large binary files — download separately)
+# Model weights (too large for GitHub — download separately, see README)
 backend/plant_disease_model_1_latest.pt
+backend/plant_disease_customcnn/
+backend/plant_disease_resnet50/
 
 # OS
 .DS_Store
