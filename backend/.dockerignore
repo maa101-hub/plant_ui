@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+*.pyo
+_tmp_download/
+test_leaf.jpg
+.env
+*.md

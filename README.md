@@ -228,6 +228,86 @@ Frontend runs at → `http://localhost:5173`
 
 ---
 
+## 🐳 Deployment
+
+The project ships with Docker support for both services plus a root `docker-compose.yml` for one-command deployment.
+
+### Prerequisites
+- Docker + Docker Compose
+- Model weights downloaded into `backend/` (see [step 2](#2-download-model-weights) above) — they are **not** baked into the images and are bind-mounted at runtime.
+
+### One-command (Docker Compose)
+
+```bash
+# 1. Download weights so they exist on the host (bind-mounted into the backend)
+python download_models.py
+
+# 2. Build and start both services
+docker compose up --build
+```
+
+- Frontend → `http://localhost:5173`
+- Backend  → `http://localhost:8000`
+
+### Configuration
+
+Both services are configured through environment variables (see the `.env.example` files):
+
+| Service | Variable | Purpose | Default |
+|---|---|---|---|
+| Backend | `CORS_ORIGINS` | Comma-separated allowed frontend origins. Use `*` to allow any (disables credentials). | `http://localhost:5173,http://127.0.0.1:5173` |
+| Frontend | `VITE_API_URL` | Backend base URL, **inlined at build time**. | `http://localhost:8000` |
+
+> **Note:** `VITE_API_URL` is baked into the static bundle when the frontend image is built. For a production domain, pass it as a build arg (or set `--build-arg VITE_API_URL=...`) and set `CORS_ORIGINS` on the backend to match your frontend's public URL.
+
+### Deploying to a production domain
+
+```bash
+# Backend
+docker build -t plantvision-backend ./backend
+docker run -p 8000:8000 \
+  -e CORS_ORIGINS="https://app.yourdomain.com" \
+  -v $(pwd)/backend/plant_disease_customcnn:/app/plant_disease_customcnn:ro \
+  -v $(pwd)/backend/plant_disease_resnet50:/app/plant_disease_resnet50:ro \
+  plantvision-backend
+
+# Frontend (API URL baked in at build time)
+docker build -t plantvision-frontend \
+  --build-arg VITE_API_URL="https://api.yourdomain.com" ./frontend
+docker run -p 80:80 plantvision-frontend
+```
+
+### Running without Docker
+
+**Backend:**
+```bash
+cd backend
+pip install -r requirements.txt
+export CORS_ORIGINS="http://localhost:5173"   # optional
+uvicorn main:app --host 0.0.0.0 --port 8000
+```
+
+**Frontend:**
+```bash
+cd frontend
+cp .env.example .env        # edit VITE_API_URL if needed
+npm install
+npm run build               # output in dist/ — serve with any static host
+npm run preview             # or preview the production build locally
+```
+
+### Graceful startup without weights
+
+The backend now **starts even if model weights are missing or fail to load** — it logs a warning per model and reports availability at `GET /health`:
+
+```json
+{ "status": "degraded", "models_loaded": { "custom_cnn": false, "resnet50": true }, ... }
+```
+
+Prediction endpoints return **HTTP 503** for any model that isn't loaded, so the API and dashboard remain reachable while you sort out weights.
+
+---
+
 ## 📡 API Reference
 
 ### Base URL: `http://localhost:8000`
