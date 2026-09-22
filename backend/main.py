@@ -20,10 +20,21 @@ from models import (
 # ── App ────────────────────────────────────────────────────────────────────────
 app = FastAPI(title="PlantVision AI API", version="2.0.0")
 
+# CORS origins are configurable via the CORS_ORIGINS env var (comma-separated).
+# Defaults to common local dev origins. Use "*" to allow any origin.
+_default_origins = "http://localhost:5173,http://127.0.0.1:5173"
+_cors_env = os.getenv("CORS_ORIGINS", _default_origins).strip()
+if _cors_env == "*":
+    _allow_origins = ["*"]
+    _allow_credentials = False  # credentials cannot be used with wildcard origin
+else:
+    _allow_origins = [o.strip() for o in _cors_env.split(",") if o.strip()]
+    _allow_credentials = True
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
-    allow_credentials=True,
+    allow_origins=_allow_origins,
+    allow_credentials=_allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -31,13 +42,29 @@ app.add_middleware(
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # ── Load models at startup ─────────────────────────────────────────────────────
-print("Loading Custom CNN (new)...")
-cnn_model = load_new_custom_cnn(os.path.join(BASE_DIR, "plant_disease_customcnn"))
-print("Custom CNN loaded ✓")
+# Weights are large and downloaded separately (see download_models.py). If they
+# are absent or fail to load, the API still starts and reports status via /health
+# instead of crashing. Prediction endpoints return 503 for unavailable models.
+def _try_load(name: str, loader, path: str):
+    if not os.path.isdir(path):
+        print(f"⚠ {name}: weights folder not found at {path} — model unavailable.")
+        return None
+    try:
+        print(f"Loading {name}...")
+        model = loader(path)
+        print(f"{name} loaded ✓")
+        return model
+    except Exception as e:  # noqa: BLE001 — we want the API to start regardless
+        print(f"⚠ {name}: failed to load ({e}) — model unavailable.")
+        return None
 
-print("Loading ResNet50...")
-resnet_model = load_resnet50(os.path.join(BASE_DIR, "plant_disease_resnet50"))
-print("ResNet50 loaded ✓")
+
+cnn_model = _try_load(
+    "Custom CNN", load_new_custom_cnn, os.path.join(BASE_DIR, "plant_disease_customcnn")
+)
+resnet_model = _try_load(
+    "ResNet50", load_resnet50, os.path.join(BASE_DIR, "plant_disease_resnet50")
+)
 
 # ── Load CSVs ──────────────────────────────────────────────────────────────────
 disease_df    = pd.read_csv(os.path.join(BASE_DIR, "disease_info.csv"),    encoding="cp1252")
@@ -136,11 +163,13 @@ def root():
 
 @app.get("/health")
 def health():
+    cnn_ok = cnn_model is not None
+    resnet_ok = resnet_model is not None
     return {
-        "status": "healthy",
+        "status": "healthy" if (cnn_ok or resnet_ok) else "degraded",
         "models_loaded": {
-            "custom_cnn": True,
-            "resnet50":   True,
+            "custom_cnn": cnn_ok,
+            "resnet50":   resnet_ok,
         },
         "classes": {"custom_cnn": 38, "resnet50": 38},
     }
@@ -165,10 +194,14 @@ async def predict(
         raise HTTPException(status_code=400, detail="Could not read image file.")
 
     if model == "resnet50":
+        if resnet_model is None:
+            raise HTTPException(status_code=503, detail="ResNet50 model is not available. Download weights (see download_models.py).")
         tensor = preprocess_resnet(image)
         class_idx, confidence, top5, latency = run_inference(resnet_model, tensor, RESNET_CLASSES)
         csv_idx = resnet_idx_to_csv_idx(class_idx)
     else:
+        if cnn_model is None:
+            raise HTTPException(status_code=503, detail="Custom CNN model is not available. Download weights (see download_models.py).")
         tensor = preprocess_cnn(image)
         class_idx, confidence, top5, latency = run_inference(cnn_model, tensor, NEW_CNN_CLASSES)
         csv_idx = new_cnn_idx_to_csv_idx(class_idx)
@@ -184,6 +217,9 @@ async def predict_compare(file: UploadFile = File(...)):
     """
     if not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="File must be an image.")
+
+    if cnn_model is None or resnet_model is None:
+        raise HTTPException(status_code=503, detail="Both models must be available to compare. Download weights (see download_models.py).")
 
     try:
         contents = await file.read()

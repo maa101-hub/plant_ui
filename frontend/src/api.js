@@ -3,7 +3,9 @@
  * All calls go to the FastAPI backend at localhost:8000
  */
 
-const BASE = 'http://localhost:8000'
+// API base URL is configurable at build time via VITE_API_URL.
+// Falls back to localhost for local development.
+const BASE = (import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(/\/$/, '')
 
 export async function fetchHealth() {
   const r = await fetch(`${BASE}/health`)

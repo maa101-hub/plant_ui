@@ -1,0 +1,17 @@
+# PlantVision AI — Backend dependencies
+# Pinned for reproducible deployments. CPU inference by default.
+
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+python-multipart==0.0.20
+pillow==11.1.0
+pandas==2.2.3
+numpy==2.2.1
+
+# PyTorch (CPU build). For GPU, install the appropriate CUDA wheel instead:
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
+torch==2.5.1
+torchvision==0.20.1
+
+# Optional: used only by download_models.py to fetch weights from Google Drive
+gdown==5.2.0

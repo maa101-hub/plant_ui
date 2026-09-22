@@ -1,0 +1,38 @@
+# PlantVision AI — full-stack local/production deployment
+#
+# Usage:
+#   1. Download model weights first (they are NOT in the image):
+#        python download_models.py
+#      This creates backend/plant_disease_customcnn/ and backend/plant_disease_resnet50/,
+#      which are bind-mounted into the backend container below.
+#   2. docker compose up --build
+#   3. Frontend → http://localhost:5173   Backend → http://localhost:8000
+
+services:
+  backend:
+    build:
+      context: ./backend
+    image: plantvision-backend
+    ports:
+      - "8000:8000"
+    environment:
+      # Allow the frontend origin. Override for production domains.
+      CORS_ORIGINS: "http://localhost:5173,http://127.0.0.1:5173"
+    volumes:
+      # Mount downloaded model weights into the container (not baked into the image).
+      - ./backend/plant_disease_customcnn:/app/plant_disease_customcnn:ro
+      - ./backend/plant_disease_resnet50:/app/plant_disease_resnet50:ro
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        # Baked into the static bundle at build time.
+        VITE_API_URL: "http://localhost:8000"
+    image: plantvision-frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
